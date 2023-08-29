@@ -41,7 +41,7 @@ class MyHomePageState extends State<MyHomePage> {
   String _gptResponse = '';
 
   List<LocaleName> _availableLocales = [];
-  final String _selectedLocaleId = 'es_ES';
+  String _selectedLocaleId = '';
 
   printLocales() async {
     var locales = await _speechToText.locales();
@@ -55,7 +55,6 @@ class MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     _initSpeech();
-    //_initLocales();
     _initChatGPT();
   }
 
@@ -83,6 +82,7 @@ class MyHomePageState extends State<MyHomePage> {
     final locales = await _speechToText.locales();
     setState(() {
       _availableLocales = locales;
+      _selectedLocaleId = locales.first.localeId;
     });
   }
 
@@ -177,6 +177,7 @@ class MyHomePageState extends State<MyHomePage> {
                 alignment: Alignment.topRight,
                 padding: const EdgeInsets.all(8),
                 child: DropdownButton<String>(
+                  value: _selectedLocaleId,
                   items: _availableLocales.map((LocaleName locale) {
                     return DropdownMenuItem<String>(
                       value: locale.localeId,

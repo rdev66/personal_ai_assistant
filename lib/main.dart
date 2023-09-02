@@ -8,6 +8,8 @@ void main() {
   runApp(const MyApp());
 }
 
+const gptPrompt = 'TLDR: ';
+
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
 
@@ -41,6 +43,8 @@ class MyHomePageState extends State<MyHomePage> {
   final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
   bool _speechAvailable = false;
+  bool isSummarizing = false;
+
   String _totalWords = '';
   String _currentWords = '';
   String _gptResponse = '';
@@ -75,13 +79,15 @@ class MyHomePageState extends State<MyHomePage> {
   }
 
   void statusListener(String status) async {
-    debugPrint("status $status");
+    //debugPrint("status $status");
+
+    setState(() {
+      _totalWords += _currentWords;
+      _currentWords = "";
+    });
+
     if (status == "done") {
       await _speechToText.stop();
-      setState(() {
-        _totalWords += " $_currentWords";
-        _currentWords = "";
-      });
       //Autorestart..
       if (_speechEnabled) {
         await Future.delayed(const Duration(milliseconds: 50));
@@ -113,9 +119,10 @@ class MyHomePageState extends State<MyHomePage> {
     debugPrint(error.errorMsg.toString());
   }
 
+  /**
+   * TODO old, buggy, remove.
+   */
   Future<void> _summarize() async {
-    const gptPrompt = 'TLDR: ';
-
     if (_totalWords.isEmpty) {
       debugPrint("No transcript to summarize");
       return;
@@ -134,15 +141,24 @@ class MyHomePageState extends State<MyHomePage> {
   }
 
   void chatComplete() async {
+    setState(() {
+      isSummarizing = true;
+    });
+
     final request = ChatCompleteText(messages: [
-      Messages(role: Role.user, content: 'Hello!'),
-      //Map.of({"role": "user", "content": 'Hello!'})
+      Messages(role: Role.user, content: '$gptPrompt $_totalWords'),
     ], maxToken: 200, model: Gpt4ChatModel());
 
     final response = await openAI.onChatCompletion(request: request);
+
     for (var element in response!.choices) {
-      print("data -> ${element.message?.content}");
+      debugPrint("data -> ${element.message?.content}");
     }
+
+    setState(() {
+      _gptResponse = response.choices.first.message!.content;
+      isSummarizing = false;
+    });
   }
 
   /// This is the callback that the SpeechToText plugin calls when
@@ -209,6 +225,14 @@ class MyHomePageState extends State<MyHomePage> {
                 ),
               ),
             ),
+            Container(
+              alignment: Alignment.topLeft,
+              padding: const EdgeInsets.all(5),
+              child: const Text(
+                'GPT Summary:',
+                style: TextStyle(fontSize: 20.0),
+              ),
+            ),
             Expanded(
               flex: 2,
               child: Container(
@@ -255,30 +279,34 @@ class MyHomePageState extends State<MyHomePage> {
   FloatingActionButton showClearButton() {
     return FloatingActionButton(
       onPressed: () {
-        if (_totalWords.isEmpty) return;
+        if (_totalWords.isEmpty || _speechEnabled) return;
 
         setState(() {
           _totalWords = '';
         });
       },
-      backgroundColor: _totalWords.isNotEmpty ? Colors.blue : Colors.grey,
+      backgroundColor:
+          _totalWords.isNotEmpty && !_speechEnabled ? Colors.blue : Colors.grey,
       tooltip: 'Clear',
       child: const Icon(Icons.clear),
     );
   }
 
-  FloatingActionButton showSummarizeButton() {
-    return FloatingActionButton(
-      onPressed: () async {
-        chatComplete();
-        //await _summarize();
-      },
-      backgroundColor: (_totalWords.isNotEmpty && _speechToText.isNotListening)
-          ? Colors.blue
-          : Colors.grey,
-      tooltip: "Summarize",
-      child: Icon(
-          _totalWords.isNotEmpty ? Icons.summarize : Icons.comments_disabled),
-    );
+  Widget showSummarizeButton() {
+    return isSummarizing
+        ? const CircularProgressIndicator()
+        : FloatingActionButton(
+            onPressed: () async {
+              chatComplete();
+            },
+            backgroundColor:
+                (_totalWords.isNotEmpty && _speechToText.isNotListening)
+                    ? Colors.blue
+                    : Colors.grey,
+            tooltip: "Summarize",
+            child: Icon(_totalWords.isNotEmpty
+                ? Icons.summarize
+                : Icons.comments_disabled),
+          );
   }
 }

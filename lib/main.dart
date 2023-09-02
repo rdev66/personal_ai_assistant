@@ -14,7 +14,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
-      title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
+      title: 'Another boring meeting? Let\'s TLDR it!',
       home: MyHomePage(),
     );
   }
@@ -29,9 +30,13 @@ class MyHomePage extends StatefulWidget {
 
 class MyHomePageState extends State<MyHomePage> {
   final openAI = OpenAI.instance.build(
+      enableLog: true,
       token: "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",
-      baseOption: HttpSetup(receiveTimeout: const Duration(seconds: 5)),
-      enableLog: true);
+      baseOption: HttpSetup(
+        sendTimeout: const Duration(seconds: 50),
+        receiveTimeout: const Duration(seconds: 50),
+        connectTimeout: const Duration(seconds: 50),
+      ));
 
   final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
@@ -55,23 +60,6 @@ class MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     _initSpeech();
-    _initChatGPT();
-  }
-
-  void errorListener(SpeechRecognitionError error) {
-    debugPrint(error.errorMsg.toString());
-  }
-
-  void statusListener(String status) async {
-    debugPrint("status $status");
-    if (status == "done" && _speechEnabled) {
-      setState(() {
-        _totalWords += " $_currentWords";
-        _currentWords = "";
-        _speechEnabled = false;
-      });
-      await _startListening();
-    }
   }
 
   /// This has to happen only once per app
@@ -86,20 +74,30 @@ class MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  void statusListener(String status) async {
+    debugPrint("status $status");
+    if (status == "done") {
+      await _speechToText.stop();
+      setState(() {
+        _totalWords += " $_currentWords";
+        _currentWords = "";
+      });
+      //Autorestart..
+      if (_speechEnabled) {
+        await Future.delayed(const Duration(milliseconds: 50));
+        await _startListening();
+      }
+    }
+  }
+
   /// Each time to start a speech recognition session
   Future _startListening() async {
-    debugPrint("=================================================");
-    await _stopListening();
-    await Future.delayed(const Duration(milliseconds: 50));
     await _speechToText.listen(
         onResult: _onSpeechResult,
         localeId: _selectedLocaleId,
         cancelOnError: false,
         partialResults: true,
         listenMode: ListenMode.dictation);
-    setState(() {
-      _speechEnabled = true;
-    });
   }
 
   /// Manually stop the active speech recognition session
@@ -108,20 +106,25 @@ class MyHomePageState extends State<MyHomePage> {
   /// listen method.
   Future _stopListening() async {
     await _speechToText.stop();
+    _speechEnabled = false;
+  }
 
-    setState(() {
-      _speechEnabled = false;
-    });
+  void errorListener(SpeechRecognitionError error) {
+    debugPrint(error.errorMsg.toString());
+  }
+
+  Future<void> _summarize() async {
+    const gptPrompt = 'TLDR: ';
 
     if (_totalWords.isEmpty) {
+      debugPrint("No transcript to summarize");
       return;
     }
-
     //GPT Processing
     final request = CompleteText(
-        prompt: 'TLDR: $_totalWords',
+        prompt: '$gptPrompt $_totalWords',
         model: TextDavinci3Model(),
-        maxTokens: 200);
+        maxTokens: 2000);
 
     await openAI.onCompletion(request: request).then((value) {
       setState(() {
@@ -130,19 +133,16 @@ class MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  void _initChatGPT() async {
-    debugPrint("=================================================");
-    await _stopListening();
-    await Future.delayed(const Duration(milliseconds: 50));
-    await _speechToText.listen(
-        onResult: _onSpeechResult,
-        localeId: _selectedLocaleId,
-        cancelOnError: false,
-        partialResults: true,
-        listenMode: ListenMode.dictation);
-    setState(() {
-      _speechEnabled = true;
-    });
+  void chatComplete() async {
+    final request = ChatCompleteText(messages: [
+      Messages(role: Role.user, content: 'Hello!'),
+      //Map.of({"role": "user", "content": 'Hello!'})
+    ], maxToken: 200, model: Gpt4ChatModel());
+
+    final response = await openAI.onChatCompletion(request: request);
+    for (var element in response!.choices) {
+      print("data -> ${element.message?.content}");
+    }
   }
 
   /// This is the callback that the SpeechToText plugin calls when
@@ -212,8 +212,7 @@ class MyHomePageState extends State<MyHomePage> {
             Expanded(
               flex: 2,
               child: Container(
-                  padding: const EdgeInsets.all(16),
-                  child: Text("RSP: $_gptResponse")),
+                  padding: const EdgeInsets.all(16), child: Text(_gptResponse)),
             ),
           ],
         ),
@@ -222,27 +221,64 @@ class MyHomePageState extends State<MyHomePage> {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           showSummarizeButton(),
-          showRecordButton(),
+          showClearButton(),
+          showStopRecordButton(),
+          showStartRecordButton(),
         ],
       ),
     );
   }
 
-  FloatingActionButton showRecordButton() {
+  FloatingActionButton showStartRecordButton() {
     return FloatingActionButton(
-      onPressed:
-          _speechToText.isNotListening ? _startListening : _stopListening,
-      tooltip: 'Listen',
-      child: Icon(_speechToText.isNotListening ? Icons.mic_off : Icons.mic),
+      backgroundColor: !_speechEnabled ? Colors.green : Colors.grey,
+      onPressed: _speechToText.isNotListening
+          ? () {
+              _speechEnabled = true;
+              _startListening();
+            }
+          : null,
+      tooltip: 'Start',
+      child: const Icon(Icons.mic),
+    );
+  }
+
+  FloatingActionButton showStopRecordButton() {
+    return FloatingActionButton(
+      backgroundColor: _speechEnabled ? Colors.red : Colors.grey,
+      onPressed: () => _stopListening(),
+      tooltip: 'Stop',
+      child: const Icon(Icons.mic_off),
+    );
+  }
+
+  FloatingActionButton showClearButton() {
+    return FloatingActionButton(
+      onPressed: () {
+        if (_totalWords.isEmpty) return;
+
+        setState(() {
+          _totalWords = '';
+        });
+      },
+      backgroundColor: _totalWords.isNotEmpty ? Colors.blue : Colors.grey,
+      tooltip: 'Clear',
+      child: const Icon(Icons.clear),
     );
   }
 
   FloatingActionButton showSummarizeButton() {
     return FloatingActionButton(
-      onPressed: () {},
+      onPressed: () async {
+        chatComplete();
+        //await _summarize();
+      },
+      backgroundColor: (_totalWords.isNotEmpty && _speechToText.isNotListening)
+          ? Colors.blue
+          : Colors.grey,
       tooltip: "Summarize",
       child: Icon(
-          _currentWords.isNotEmpty ? Icons.summarize : Icons.comments_disabled),
+          _totalWords.isNotEmpty ? Icons.summarize : Icons.comments_disabled),
     );
   }
 }

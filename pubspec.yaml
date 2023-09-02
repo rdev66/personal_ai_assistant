@@ -25,13 +25,14 @@ environment:
 # To automatically upgrade your package dependencies to the latest versions
 # consider running `flutter pub upgrade --major-versions`. Alternatively,
 # dependencies can be manually updated by changing the version numbers below to
-# the latest version available on pub.dev. To see which dependencies have newer
+# the latest v .ersion available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
   chat_gpt_sdk: ^2.2.4
   cupertino_icons: ^1.0.2
   flutter:
     sdk: flutter
+  flutter_tts: ^3.8.1
   speech_to_text: ^6.3.0
 
 dev_dependencies:

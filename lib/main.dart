@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:chat_gpt_sdk/chat_gpt_sdk.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -8,7 +12,8 @@ void main() {
   runApp(const MyApp());
 }
 
-const gptPrompt = 'TLDR: ';
+//const gptPrompt = 'TLDR: ';
+const gptPromptBullet = 'Using extractive summarization, condense this business report into key bullet points: ';
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
@@ -31,6 +36,11 @@ class MyHomePage extends StatefulWidget {
 }
 
 class MyHomePageState extends State<MyHomePage> {
+  bool get isIOS => !kIsWeb && Platform.isIOS;
+  bool get isAndroid => !kIsWeb && Platform.isAndroid;
+
+  late FlutterTts _flutterTts;
+
   final openAI = OpenAI.instance.build(
       enableLog: true,
       token: "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",
@@ -44,6 +54,7 @@ class MyHomePageState extends State<MyHomePage> {
   bool _speechEnabled = false;
   bool _speechAvailable = false;
   bool isSummarizing = false;
+  bool _textToSpeechEnabled = false;
 
   String _totalWords = '';
   String _currentWords = '';
@@ -64,6 +75,7 @@ class MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     _initSpeech();
+    _initTTS();
   }
 
   /// This has to happen only once per app
@@ -79,7 +91,7 @@ class MyHomePageState extends State<MyHomePage> {
   }
 
   void statusListener(String status) async {
-    //debugPrint("status $status");
+    debugPrint("status $status");
 
     setState(() {
       _totalWords += _currentWords;
@@ -129,7 +141,7 @@ class MyHomePageState extends State<MyHomePage> {
     }
     //GPT Processing
     final request = CompleteText(
-        prompt: '$gptPrompt $_totalWords',
+        prompt: '$gptPromptBullet $_totalWords',
         model: TextDavinci3Model(),
         maxTokens: 2000);
 
@@ -141,12 +153,21 @@ class MyHomePageState extends State<MyHomePage> {
   }
 
   void chatComplete() async {
+    if (_gptResponse.isNotEmpty) {
+      debugPrint("Already summarized");
+      return;
+    }
+    if (_totalWords.isEmpty) {
+      debugPrint("No transcript to summarize");
+      return;
+    }
+
     setState(() {
       isSummarizing = true;
     });
 
     final request = ChatCompleteText(messages: [
-      Messages(role: Role.user, content: '$gptPrompt $_totalWords'),
+      Messages(role: Role.user, content: '$gptPromptBullet $_totalWords'),
     ], maxToken: 200, model: Gpt4ChatModel());
 
     final response = await openAI.onChatCompletion(request: request);
@@ -159,6 +180,10 @@ class MyHomePageState extends State<MyHomePage> {
       _gptResponse = response.choices.first.message!.content;
       isSummarizing = false;
     });
+
+    if (_textToSpeechEnabled) {
+      _speak(_gptResponse);
+    }
   }
 
   /// This is the callback that the SpeechToText plugin calls when
@@ -225,14 +250,36 @@ class MyHomePageState extends State<MyHomePage> {
                 ),
               ),
             ),
-            Container(
-              alignment: Alignment.topLeft,
-              padding: const EdgeInsets.all(5),
-              child: const Text(
-                'GPT Summary:',
-                style: TextStyle(fontSize: 20.0),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+              Container(
+                alignment: Alignment.topLeft,
+                padding: const EdgeInsets.all(5),
+                child: const Text(
+                  'GPT Summary:',
+                  style: TextStyle(fontSize: 20.0),
+                ),
               ),
-            ),
+              Row(
+                children: [
+                  const Text("Speak?", style: TextStyle(fontSize: 20.0)),
+                  Container(
+                      alignment: Alignment.topRight,
+                      padding: const EdgeInsets.all(2),
+                      child: Switch(
+                        // This bool value toggles the switch.
+                        value: _textToSpeechEnabled,
+                        activeColor: Colors.blue,
+                        inactiveThumbColor: Colors.grey,
+                        onChanged: (bool value) {
+                          // This is called when the user toggles the switch.
+                          setState(() {
+                            _textToSpeechEnabled = value;
+                          });
+                        },
+                      )),
+                ],
+              ),
+            ]),
             Expanded(
               flex: 2,
               child: Container(
@@ -283,6 +330,7 @@ class MyHomePageState extends State<MyHomePage> {
 
         setState(() {
           _totalWords = '';
+          _gptResponse = '';
         });
       },
       backgroundColor:
@@ -298,6 +346,10 @@ class MyHomePageState extends State<MyHomePage> {
         : FloatingActionButton(
             onPressed: () async {
               chatComplete();
+
+              if (_textToSpeechEnabled) {
+                _speak(_gptResponse);
+              }
             },
             backgroundColor:
                 (_totalWords.isNotEmpty && _speechToText.isNotListening)
@@ -308,5 +360,47 @@ class MyHomePageState extends State<MyHomePage> {
                 ? Icons.summarize
                 : Icons.comments_disabled),
           );
+  }
+
+  void _initTTS() {
+    _flutterTts = FlutterTts();
+    _setAwaitOptions();
+
+    if (isAndroid) {
+      _getDefaultEngine();
+      _getDefaultVoice();
+    }
+  }
+
+  Future _setAwaitOptions() async {
+    await _flutterTts.awaitSpeakCompletion(true);
+  }
+
+  Future _getDefaultEngine() async {
+    var engine = await _flutterTts.getDefaultEngine;
+    if (engine != null) {
+      print(engine);
+    }
+  }
+
+  Future _getDefaultVoice() async {
+    var voice = await _flutterTts.getDefaultVoice;
+    if (voice != null) {
+      print(voice);
+    }
+  }
+
+  Future _speak(String _newVoiceText) async {
+    double volume = 0.5;
+    double pitch = 1.0;
+    double rate = 0.4;
+
+    await _flutterTts.setVolume(volume);
+    await _flutterTts.setSpeechRate(rate);
+    await _flutterTts.setPitch(pitch);
+
+    if (_newVoiceText.isNotEmpty) {
+      await _flutterTts.speak(_newVoiceText);
+    }
   }
 }

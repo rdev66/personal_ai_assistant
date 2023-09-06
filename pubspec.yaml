@@ -33,7 +33,9 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_tts: ^3.8.1
+  searchable_listview: ^2.6.1
   speech_to_text: ^6.3.0
+  youtube_explode_dart: ^2.0.2
 
 dev_dependencies:
   flutter_lints: ^2.0.0

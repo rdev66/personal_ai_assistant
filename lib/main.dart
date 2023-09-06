@@ -4,38 +4,40 @@ import 'package:chat_gpt_sdk/chat_gpt_sdk.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:speech_continuous_none/widget/gpt_bar.dart';
+import 'package:speech_continuous_none/widget/toggle_source_bar.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import 'widget/floating_action_buttons_bar.dart';
+import 'widget/language_bar.dart';
+
 void main() {
-  runApp(const MyApp());
+  runApp(const SpeechToSummaryApp());
 }
 
-//const gptPrompt = 'TLDR: ';
-const gptPromptBullet = 'Using extractive summarization, condense this business report into key bullet points: ';
-
-class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+class SpeechToSummaryApp extends StatelessWidget {
+  const SpeechToSummaryApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Another boring meeting? Let\'s TLDR it!',
-      home: MyHomePage(),
+      title: 'Personal AI asistant',
+      home: SpeechToSummary(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({Key? key}) : super(key: key);
+class SpeechToSummary extends StatefulWidget {
+  const SpeechToSummary({Key? key}) : super(key: key);
 
   @override
-  MyHomePageState createState() => MyHomePageState();
+  SpeechToSummaryState createState() => SpeechToSummaryState();
 }
 
-class MyHomePageState extends State<MyHomePage> {
+class SpeechToSummaryState extends State<SpeechToSummary> {
   bool get isIOS => !kIsWeb && Platform.isIOS;
   bool get isAndroid => !kIsWeb && Platform.isAndroid;
 
@@ -44,32 +46,27 @@ class MyHomePageState extends State<MyHomePage> {
   final openAI = OpenAI.instance.build(
       enableLog: true,
       token: "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",
+//      token: "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",
       baseOption: HttpSetup(
         sendTimeout: const Duration(seconds: 50),
         receiveTimeout: const Duration(seconds: 50),
         connectTimeout: const Duration(seconds: 50),
       ));
 
-  final SpeechToText _speechToText = SpeechToText();
-  bool _speechEnabled = false;
-  bool _speechAvailable = false;
+  final SpeechToText speechToText = SpeechToText();
+
+  bool speechEnabled = false;
   bool isSummarizing = false;
-  bool _textToSpeechEnabled = false;
+  bool speechAvailable = false;
+  bool textToSpeechEnabled = false;
+  List<bool> selected = [true, false];
 
-  String _totalWords = '';
-  String _currentWords = '';
-  String _gptResponse = '';
+  String totalWords = '';
+  String currentWords = '';
+  String gptResponse = '';
 
-  List<LocaleName> _availableLocales = [];
-  String _selectedLocaleId = '';
-
-  printLocales() async {
-    var locales = await _speechToText.locales();
-    for (var local in locales) {
-      debugPrint(local.name);
-      debugPrint(local.localeId);
-    }
-  }
+  List<LocaleName> availableLocales = [];
+  String selectedLocaleId = '';
 
   @override
   void initState() {
@@ -78,288 +75,16 @@ class MyHomePageState extends State<MyHomePage> {
     _initTTS();
   }
 
-  /// This has to happen only once per app
+  /// This has to happen only once per app init.
   void _initSpeech() async {
-    _speechAvailable = await _speechToText.initialize(
+    speechAvailable = await speechToText.initialize(
         onError: errorListener, onStatus: statusListener);
 
-    final locales = await _speechToText.locales();
+    final locales = await speechToText.locales();
     setState(() {
-      _availableLocales = locales;
-      _selectedLocaleId = locales.first.localeId;
+      availableLocales = locales;
+      selectedLocaleId = locales.first.localeId;
     });
-  }
-
-  void statusListener(String status) async {
-    debugPrint("status $status");
-
-    setState(() {
-      _totalWords += _currentWords;
-      _currentWords = "";
-    });
-
-    if (status == "done") {
-      await _speechToText.stop();
-      //Autorestart..
-      if (_speechEnabled) {
-        await Future.delayed(const Duration(milliseconds: 50));
-        await _startListening();
-      }
-    }
-  }
-
-  /// Each time to start a speech recognition session
-  Future _startListening() async {
-    await _speechToText.listen(
-        onResult: _onSpeechResult,
-        localeId: _selectedLocaleId,
-        cancelOnError: false,
-        partialResults: true,
-        listenMode: ListenMode.dictation);
-  }
-
-  /// Manually stop the active speech recognition session
-  /// Note that there are also timeouts that each platform enforces
-  /// and the SpeechToText plugin supports setting timeouts on the
-  /// listen method.
-  Future _stopListening() async {
-    await _speechToText.stop();
-    _speechEnabled = false;
-  }
-
-  void errorListener(SpeechRecognitionError error) {
-    debugPrint(error.errorMsg.toString());
-  }
-
-  /**
-   * TODO old, buggy, remove.
-   */
-  Future<void> _summarize() async {
-    if (_totalWords.isEmpty) {
-      debugPrint("No transcript to summarize");
-      return;
-    }
-    //GPT Processing
-    final request = CompleteText(
-        prompt: '$gptPromptBullet $_totalWords',
-        model: TextDavinci3Model(),
-        maxTokens: 2000);
-
-    await openAI.onCompletion(request: request).then((value) {
-      setState(() {
-        _gptResponse = value!.choices.first.text;
-      });
-    });
-  }
-
-  void chatComplete() async {
-    if (_gptResponse.isNotEmpty) {
-      debugPrint("Already summarized");
-      return;
-    }
-    if (_totalWords.isEmpty) {
-      debugPrint("No transcript to summarize");
-      return;
-    }
-
-    setState(() {
-      isSummarizing = true;
-    });
-
-    final request = ChatCompleteText(messages: [
-      Messages(role: Role.user, content: '$gptPromptBullet $_totalWords'),
-    ], maxToken: 200, model: Gpt4ChatModel());
-
-    final response = await openAI.onChatCompletion(request: request);
-
-    for (var element in response!.choices) {
-      debugPrint("data -> ${element.message?.content}");
-    }
-
-    setState(() {
-      _gptResponse = response.choices.first.message!.content;
-      isSummarizing = false;
-    });
-
-    if (_textToSpeechEnabled) {
-      _speak(_gptResponse);
-    }
-  }
-
-  /// This is the callback that the SpeechToText plugin calls when
-  /// the platform returns recognized words.
-  void _onSpeechResult(SpeechRecognitionResult result) {
-    setState(() {
-      _currentWords = result.recognizedWords;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        title: const Text('Another boring meeting?'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Row(children: [
-              Container(
-                alignment: Alignment.topLeft,
-                padding: const EdgeInsets.all(8),
-                child: const Text(
-                  'Language:',
-                  style: TextStyle(fontSize: 20.0),
-                ),
-              ),
-              Container(
-                alignment: Alignment.topRight,
-                padding: const EdgeInsets.all(8),
-                child: DropdownButton<String>(
-                  value: _selectedLocaleId,
-                  items: _availableLocales.map((LocaleName locale) {
-                    return DropdownMenuItem<String>(
-                      value: locale.localeId,
-                      child: Text(locale.name),
-                    );
-                  }).toList(),
-                  onChanged: (_) {},
-                ),
-              ),
-            ]),
-            Container(
-              alignment: Alignment.topLeft,
-              padding: const EdgeInsets.all(5),
-              child: const Text(
-                'Transcript:',
-                style: TextStyle(fontSize: 20.0),
-              ),
-            ),
-            Expanded(
-              flex: 2,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  _totalWords.isNotEmpty
-                      ? '$_totalWords $_currentWords'
-                      : _speechAvailable
-                          ? 'Tap the microphone to start listening...'
-                          : 'Speech not available',
-                ),
-              ),
-            ),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-              Container(
-                alignment: Alignment.topLeft,
-                padding: const EdgeInsets.all(5),
-                child: const Text(
-                  'GPT Summary:',
-                  style: TextStyle(fontSize: 20.0),
-                ),
-              ),
-              Row(
-                children: [
-                  const Text("Speak?", style: TextStyle(fontSize: 20.0)),
-                  Container(
-                      alignment: Alignment.topRight,
-                      padding: const EdgeInsets.all(2),
-                      child: Switch(
-                        // This bool value toggles the switch.
-                        value: _textToSpeechEnabled,
-                        activeColor: Colors.blue,
-                        inactiveThumbColor: Colors.grey,
-                        onChanged: (bool value) {
-                          // This is called when the user toggles the switch.
-                          setState(() {
-                            _textToSpeechEnabled = value;
-                          });
-                        },
-                      )),
-                ],
-              ),
-            ]),
-            Expanded(
-              flex: 2,
-              child: Container(
-                  padding: const EdgeInsets.all(16), child: Text(_gptResponse)),
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          showSummarizeButton(),
-          showClearButton(),
-          showStopRecordButton(),
-          showStartRecordButton(),
-        ],
-      ),
-    );
-  }
-
-  FloatingActionButton showStartRecordButton() {
-    return FloatingActionButton(
-      backgroundColor: !_speechEnabled ? Colors.green : Colors.grey,
-      onPressed: _speechToText.isNotListening
-          ? () {
-              _speechEnabled = true;
-              _startListening();
-            }
-          : null,
-      tooltip: 'Start',
-      child: const Icon(Icons.mic),
-    );
-  }
-
-  FloatingActionButton showStopRecordButton() {
-    return FloatingActionButton(
-      backgroundColor: _speechEnabled ? Colors.red : Colors.grey,
-      onPressed: () => _stopListening(),
-      tooltip: 'Stop',
-      child: const Icon(Icons.mic_off),
-    );
-  }
-
-  FloatingActionButton showClearButton() {
-    return FloatingActionButton(
-      onPressed: () {
-        if (_totalWords.isEmpty || _speechEnabled) return;
-
-        setState(() {
-          _totalWords = '';
-          _gptResponse = '';
-        });
-      },
-      backgroundColor:
-          _totalWords.isNotEmpty && !_speechEnabled ? Colors.blue : Colors.grey,
-      tooltip: 'Clear',
-      child: const Icon(Icons.clear),
-    );
-  }
-
-  Widget showSummarizeButton() {
-    return isSummarizing
-        ? const CircularProgressIndicator()
-        : FloatingActionButton(
-            onPressed: () async {
-              chatComplete();
-
-              if (_textToSpeechEnabled) {
-                _speak(_gptResponse);
-              }
-            },
-            backgroundColor:
-                (_totalWords.isNotEmpty && _speechToText.isNotListening)
-                    ? Colors.blue
-                    : Colors.grey,
-            tooltip: "Summarize",
-            child: Icon(_totalWords.isNotEmpty
-                ? Icons.summarize
-                : Icons.comments_disabled),
-          );
   }
 
   void _initTTS() {
@@ -372,25 +97,213 @@ class MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  Future _setAwaitOptions() async {
+  /// Each time to start a speech recognition session
+  Future<void> startListening() async {
+    if (speechToText.isListening) return;
+
+    await speechToText.listen(
+        onResult: _onSpeechResult,
+        localeId: selectedLocaleId,
+        cancelOnError: false,
+        partialResults: true,
+        listenMode: ListenMode.dictation);
+
+    setState(() {
+      speechEnabled = true;
+    });
+  }
+
+  void statusListener(String status) async {
+    debugPrint("status $status");
+
+    setState(() {
+      totalWords += currentWords;
+      currentWords = "";
+    });
+
+    if (status == "done") {
+      await speechToText.stop();
+
+      //Autorestart..
+      if (speechEnabled) {
+        await Future.delayed(const Duration(milliseconds: 25));
+        await startListening();
+      }
+    }
+  }
+
+  Future<void> stopListening() async {
+    await speechToText.stop();
+    setState(() {
+      speechEnabled = false;
+    });
+  }
+
+  /// This is the callback that the SpeechToText plugin calls when
+  /// the platform returns recognized words.
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    setState(() {
+      currentWords = result.recognizedWords;
+    });
+  }
+
+  void errorListener(SpeechRecognitionError error) {
+    debugPrint(error.errorMsg.toString());
+  }
+
+  void chatComplete() async {
+    if (gptResponse.isNotEmpty) {
+      debugPrint("Already summarized");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Already summarized'),
+        ),
+      );
+      return;
+    }
+    if (totalWords.isEmpty) {
+      debugPrint("No transcript to summarize");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No transcript to summarize'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      isSummarizing = true;
+    });
+
+    //const gptPrompt = 'TLDR: ';
+    const gptPromptBullet =
+        'Using extractive summarization, condense this business report into key bullet points: ';
+
+    final request = ChatCompleteText(messages: [
+      Messages(role: Role.user, content: '$gptPromptBullet $totalWords'),
+    ], maxToken: 200, model: Gpt4ChatModel());
+
+    final response =
+        await openAI.onChatCompletion(request: request).catchError((err) {
+      setState(() {
+        isSummarizing = false;
+      });
+
+      if (err is OpenAIAuthError) {
+        if (kDebugMode) {
+          print('OpenAIAuthError error ${err.data?.error.toMap()}');
+        }
+      }
+      if (err is OpenAIRateLimitError) {
+        if (kDebugMode) {
+          print('OpenAIRateLimitError error ${err.data?.error.toMap()}');
+        }
+      }
+      if (err is OpenAIServerError) {
+        if (kDebugMode) {
+          print('OpenAIServerError error $err');
+          print('OpenAIServerError error ${err.data?.error.toMap()}');
+        }
+      }
+      return null;
+    });
+
+    for (var element in response!.choices) {
+      debugPrint("data -> ${element.message?.content}");
+    }
+
+    setState(() {
+      gptResponse = response.choices.first.message!.content;
+      isSummarizing = false;
+    });
+
+    if (textToSpeechEnabled) {
+      speak(gptResponse);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        centerTitle: true,
+        title: const Text('Personal AI meeting assistant'),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: <Widget>[
+            LanguageBar(selectedLocaleId, availableLocales),
+            ToggleSourceBar(
+                totalWords, speechAvailable, toggleSelected, selected),
+            GPTBar(gptResponse, textToSpeechEnabled, toggleTextToSpeech),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButtonsBar(
+          speechEnabled,
+          isSummarizing,
+          totalWords,
+          gptResponse,
+          speechToText,
+          startListening,
+          stopListening,
+          clearGPTResponse,
+          chatComplete,
+          speak),
+    );
+  }
+
+  void toggleSelected(int selectedIdx) {
+    {
+      setState(() {
+        for (int buttonIndex = 0;
+            buttonIndex < selected.length;
+            buttonIndex++) {
+          if (buttonIndex == selectedIdx) {
+            selected[buttonIndex] = true;
+          } else {
+            selected[buttonIndex] = false;
+          }
+        }
+      });
+    }
+  }
+
+  void toggleTextToSpeech(bool toggle) {
+    setState(() {
+      textToSpeechEnabled = toggle;
+    });
+  }
+
+  void clearGPTResponse() {
+    if (totalWords.isEmpty || speechEnabled) return;
+
+    setState(() {
+      totalWords = '';
+      gptResponse = '';
+    });
+  }
+
+  Future<void> _setAwaitOptions() async {
     await _flutterTts.awaitSpeakCompletion(true);
   }
 
-  Future _getDefaultEngine() async {
+  Future<void> _getDefaultEngine() async {
     var engine = await _flutterTts.getDefaultEngine;
     if (engine != null) {
-      print(engine);
+      debugPrint(engine);
     }
   }
 
-  Future _getDefaultVoice() async {
+  Future<void> _getDefaultVoice() async {
     var voice = await _flutterTts.getDefaultVoice;
     if (voice != null) {
-      print(voice);
+      debugPrint(voice.toString());
     }
   }
 
-  Future _speak(String _newVoiceText) async {
+  Future<void> speak(String newVoiceText) async {
     double volume = 0.5;
     double pitch = 1.0;
     double rate = 0.4;
@@ -399,8 +312,8 @@ class MyHomePageState extends State<MyHomePage> {
     await _flutterTts.setSpeechRate(rate);
     await _flutterTts.setPitch(pitch);
 
-    if (_newVoiceText.isNotEmpty) {
-      await _flutterTts.speak(_newVoiceText);
+    if (newVoiceText.isNotEmpty) {
+      await _flutterTts.speak(newVoiceText);
     }
   }
 }

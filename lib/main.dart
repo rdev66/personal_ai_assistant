@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:chat_gpt_sdk/chat_gpt_sdk.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:speech_continuous_none/util/search_youtube.dart';
 import 'package:speech_continuous_none/widget/gpt_bar.dart';
 import 'package:speech_continuous_none/widget/toggle_source_bar.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
@@ -15,6 +15,8 @@ import 'widget/floating_action_buttons_bar.dart';
 import 'widget/language_bar.dart';
 
 void main() {
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   runApp(const SpeechToSummaryApp());
 }
 
@@ -72,8 +74,24 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
   @override
   void initState() {
     super.initState();
+    initialization();
     _initSpeech();
     _initTTS();
+  }
+
+  void initialization() async {
+    // This is where you can initialize the resources needed by your app while
+    // the splash screen is displayed.  Remove the following example because
+    // delaying the user experience is a bad design practice!
+    // ignore_for_file: avoid_print
+    print('ready in 3...');
+    await Future.delayed(const Duration(seconds: 1));
+    print('ready in 2...');
+    await Future.delayed(const Duration(seconds: 1));
+    print('ready in 1...');
+    await Future.delayed(const Duration(seconds: 1));
+    print('go!');
+    FlutterNativeSplash.remove();
   }
 
   /// This has to happen only once per app init.

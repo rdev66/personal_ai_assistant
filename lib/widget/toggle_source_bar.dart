@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'transcript_bar.dart';
+import 'mic_transcript_bar.dart';
 import 'youtube_bar.dart';
 
 class ToggleSourceBar extends StatefulWidget {
-  const ToggleSourceBar(this.totalWords, this.speechAvailable,
-      this.toggleSelected, this.selected,
+  const ToggleSourceBar(
+      this.totalWords, this.speechAvailable, this.toggleSelected, this.selected,
       {super.key});
 
   final String totalWords;
@@ -20,10 +20,8 @@ class _ToggleSourceBarState extends State<ToggleSourceBar> {
   @override
   Widget build(BuildContext context) {
     return widget.selected[0]
-        ? TranscriptBar(widget.totalWords, 
-        widget.speechAvailable, 
-        widget.toggleSelected, 
-        widget.selected)
+        ? MicTranscriptBar(widget.totalWords, widget.speechAvailable,
+            widget.toggleSelected, widget.selected)
         : YoutubeBar(widget.toggleSelected, widget.selected);
   }
 }

@@ -29,10 +29,15 @@ environment:
 # versions available, run `flutter pub outdated`.
 dependencies:
   chat_gpt_sdk: ^2.2.4
+  console: ^4.1.0
   cupertino_icons: ^1.0.2
   flutter:
     sdk: flutter
+  flutter_native_splash: ^2.3.2
   flutter_tts: ^3.8.1
+  google_speech: ^2.2.0
+  path_provider: ^2.1.1
+  permission_handler: ^10.4.5
   searchable_listview: ^2.6.1
   speech_to_text: ^6.3.0
   youtube_explode_dart: ^2.0.2
@@ -51,8 +56,8 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
+  assets:
+    - assets/test_service_account.json
   #   - images/a_dot_ham.jpeg
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware

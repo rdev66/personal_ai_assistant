@@ -1,5 +1,9 @@
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_speech/google_speech.dart' as google;
+import 'package:google_speech/speech_client_authenticator.dart';
 import 'package:speech_continuous_none/util/search_youtube.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../util/debouncer.dart';
@@ -19,6 +23,8 @@ class _YoutubeBarState extends State<YoutubeBar> {
   final _debouncer = Debouncer();
   List<Video> videosList = [];
   List<Video> vlist = [];
+  late Video selectedVideo;
+  String transcribedText = '';
 
   String query = '';
 
@@ -44,11 +50,12 @@ class _YoutubeBarState extends State<YoutubeBar> {
   @override
   void initState() {
     super.initState();
-    searchYoutubeVideos("Taylor Swift").then((value) => setState(
+
+    /* searchYoutubeVideos("Taylor Swift").then((value) => setState(
           () {
             videosList.addAll(value);
           },
-        ));
+        )); */
   }
 
   @override
@@ -62,7 +69,7 @@ class _YoutubeBarState extends State<YoutubeBar> {
               alignment: Alignment.topLeft,
               padding: const EdgeInsets.all(8),
               child: const Text(
-                'Transcript from Youtube:',
+                'Transcribe from Youtube:',
                 style: TextStyle(fontSize: 20.0, fontWeight: FontWeight.bold),
               ),
             ),
@@ -74,7 +81,7 @@ class _YoutubeBarState extends State<YoutubeBar> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-//Search Bar to List of typed Subject
+              //Search Bar to List of typed Subject
               Container(
                 padding: const EdgeInsets.all(5),
                 child: TextField(
@@ -97,9 +104,12 @@ class _YoutubeBarState extends State<YoutubeBar> {
                         if (kDebugMode) {
                           print('search');
                         }
-                        searchYoutubeVideos(query).then((value) => setState(
+                        searchYoutubeVideos(query).then((results) => setState(
                               () {
-                                videosList.addAll(value);
+                                //results
+                                //  .sort((a,b) => a.uploadDate.difference(b.uploadDate!).inMilliseconds);
+
+                                videosList.addAll(results);
                               },
                             ));
                       },
@@ -146,13 +156,65 @@ class _YoutubeBarState extends State<YoutubeBar> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
                                 ListTile(
+                                  onTap: () {
+                                    if (kDebugMode) {
+                                      print(
+                                          'Youtube Video: ${videosList[index].title}');
+                                    }
+                                    selectedVideo = videosList[index];
+
+                                    showDialog(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                              title: const Text(
+                                                'Please Confirm transcription',
+                                                style: TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.bold),
+                                              ),
+                                              content: Text(
+                                                  'Are you sure to transcribe: ${selectedVideo.title} ?'),
+                                              actions: [
+                                                TextButton(
+                                                    onPressed: () {
+                                                      // Close the dialog
+                                                      Navigator.of(context)
+                                                          .pop();
+                                                    },
+                                                    child: const Text(
+                                                      'No',
+                                                      style: TextStyle(
+                                                          fontSize: 18,
+                                                          fontWeight:
+                                                              FontWeight.bold),
+                                                    )),
+                                                // The "Yes" button
+                                                TextButton(
+                                                    onPressed: () {
+                                                      // Remove the box
+                                                      downloadAndTranscribe(
+                                                          selectedVideo);
+                                                      // Close the dialog
+                                                      Navigator.of(context)
+                                                          .pop();
+                                                    },
+                                                    child: const Text(
+                                                      'Yes',
+                                                      style: TextStyle(
+                                                          fontSize: 18,
+                                                          fontWeight:
+                                                              FontWeight.bold),
+                                                    )),
+                                              ],
+                                            ));
+                                  },
                                   title: Text(
                                     videosList[index].title,
                                     style: const TextStyle(fontSize: 16),
                                   ),
                                   subtitle: Text(
-                                    videosList[index].author,
-                                    style: const TextStyle(fontSize: 16),
+                                    '${videosList[index].duration?.inMinutes} minutes',
+                                    style: const TextStyle(fontSize: 12),
                                   ),
                                 )
                               ],
@@ -160,18 +222,37 @@ class _YoutubeBarState extends State<YoutubeBar> {
                           ),
                         );
                       }))),
-              SizedBox(
-                height: 20,
-                child: ListView(children: <Widget>[
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    child: const Text(
-                      'Youtube Transcript will be displayed here',
-                      style:
-                          TextStyle(fontSize: 18, fontStyle: FontStyle.italic),
-                    ),
-                  )
-                ]),
+              Column(
+                children: [
+                  SizedBox(
+                    height: 20,
+                    child: ListView(children: <Widget>[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        child: const Text(
+                          'Youtube Transcript will be displayed here',
+                          style: TextStyle(
+                              fontSize: 18, fontStyle: FontStyle.italic),
+                        ),
+                      )
+                    ]),
+                  ),
+                  SizedBox(
+                    height: 200,
+                    child: ListView(children: <Widget>[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          transcribedText.isNotEmpty
+                              ? transcribedText
+                              : 'Waiting for transcription..',
+                          style: const TextStyle(
+                              fontSize: 16, fontStyle: FontStyle.italic),
+                        ),
+                      )
+                    ]),
+                  ),
+                ],
               )
             ],
           ),
@@ -187,5 +268,62 @@ class _YoutubeBarState extends State<YoutubeBar> {
     if (kDebugMode) {
       print("updateVids: ${videosList.toList()}");
     }
+  }
+
+  void downloadAndTranscribe(Video selectedVideo) async {
+    final YoutubeExplode yt = YoutubeExplode();
+    final StreamManifest manifest =
+        await yt.videos.streamsClient.getManifest(selectedVideo.id);
+    final StreamInfo audioStreamInfo = manifest.audioOnly.withHighestBitrate();
+    //
+//  audioStreamInfo.
+    // Open the file in writeAppend.
+    //final output = file.openWrite(mode: FileMode.writeOnlyAppend);
+
+// Track the file download status.
+//  final len = audioStreamInfo.size.totalBytes;
+//  var count = 0;
+
+    final audioStream = yt.videos.streamsClient.get(audioStreamInfo);
+
+    // Create the message and set the cursor position.
+    debugPrint(
+        'Downloading ${selectedVideo.title}.${audioStreamInfo.container.name}');
+
+    final streamingConfig = google.StreamingRecognitionConfig(
+        config: google.RecognitionConfig(
+            encoding: audioStreamInfo.codec.parameters['codecs'] == 'opus'
+                ? google.AudioEncoding.ENCODING_UNSPECIFIED
+                : google.AudioEncoding.LINEAR16,
+            model: google.RecognitionModel.basic,
+            enableAutomaticPunctuation: true,
+            sampleRateHertz: 48000 ,
+            languageCode: 'en-US'),
+        interimResults: true);
+
+    // Open the file to write.
+    //List<int> fileStream = [];
+
+//  var audio = yt.videos.streamsClient.get(audioStreamInfo);
+
+    final serviceAccount = ServiceAccount.fromString(
+        (await rootBundle.loadString('assets/test_service_account.json')));
+
+    final speechToText = google.SpeechToText.viaServiceAccount(serviceAccount);
+
+    final responseStream = speechToText.streamingRecognize(
+        streamingConfig, yt.videos.streamsClient.get(audioStreamInfo));
+
+    responseStream.listen((data) {
+      if (kDebugMode) {
+        print(data);
+      }
+      setState(() {
+        transcribedText = data.results
+            .map((e) => e.alternatives.first.transcript)
+            .toList()
+            .join('\n');
+      });
+    });
   }
 }

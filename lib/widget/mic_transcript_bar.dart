@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
 import 'toggle_bar.dart';
 
-class TranscriptBar extends StatelessWidget {
-  const TranscriptBar(
-      this.totalWords, 
-      this.speechAvailable, 
-      this.toggleselected, 
-      this.selected,
-      
-      {super.key}
-      );
+class MicTranscriptBar extends StatelessWidget {
+  const MicTranscriptBar(
+      this.totalWords, this.speechAvailable, this.toggleselected, this.selected,
+      {super.key});
 
   final bool speechAvailable;
   final String totalWords;

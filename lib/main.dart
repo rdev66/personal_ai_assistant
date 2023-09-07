@@ -4,6 +4,7 @@ import 'package:chat_gpt_sdk/chat_gpt_sdk.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:speech_continuous_none/util/search_youtube.dart';
 import 'package:speech_continuous_none/widget/gpt_bar.dart';
 import 'package:speech_continuous_none/widget/toggle_source_bar.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
@@ -77,6 +78,9 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
 
   /// This has to happen only once per app init.
   void _initSpeech() async {
+    //var p = await searchYoutubeVideos("query");
+    //print(p);
+
     speechAvailable = await speechToText.initialize(
         onError: errorListener, onStatus: statusListener);
 
@@ -231,7 +235,7 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
       ),
       body: SingleChildScrollView(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: <Widget>[
             LanguageBar(selectedLocaleId, availableLocales),
             ToggleSourceBar(

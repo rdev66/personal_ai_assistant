@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
-Future<List<String>> searchYoutube(String query) async {
+Future<List<Video>> searchYoutubeVideos(String query) async {
   final YoutubeExplode yt = YoutubeExplode();
-  final VideoSearchList streamInfo;
   try {
-    //final streamInfo = await yt.videos.streamsClient.getManifest('fRh_vgS2dFE');
-    streamInfo = await yt.search.search(query);
-
-    debugPrint(streamInfo.toString());
-
+    print('searching youtube for $query');
+    //final result = await yt.videos.streamsClient.getManifest('fRh_vgS2dFE');
+    //var result = await yt.search.search(query);
     // Close the YoutubeExplode's http client.
-    yt.close();
-    return streamInfo.map((result) => result.title).toList();
+
+    final result = await yt.search.search(query);
+
+
+    debugPrint('searchYoutubeVideos: ${result.length}');
+
+    return result;
   } catch (e) {
     debugPrint(e.toString());
     return List.empty();
+  } finally {
+    yt.close();
   }
 }

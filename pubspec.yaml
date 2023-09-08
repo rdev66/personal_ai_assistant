@@ -31,6 +31,8 @@ dependencies:
   chat_gpt_sdk: ^2.2.4
   console: ^4.1.0
   cupertino_icons: ^1.0.2
+  firebase_core: ^2.15.1
+  firebase_storage: ^11.2.6
   flutter:
     sdk: flutter
   flutter_native_splash: ^2.3.2

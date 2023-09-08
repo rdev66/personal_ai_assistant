@@ -1,3 +1,4 @@
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,8 @@ import 'package:google_speech/speech_client_authenticator.dart';
 import 'package:speech_continuous_none/util/search_youtube.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../util/debouncer.dart';
+import '../util/download_from_youtube.dart';
+import '../util/upload_to_cloud.dart';
 import 'toggle_bar.dart';
 
 class YoutubeBar extends StatefulWidget {
@@ -192,8 +195,9 @@ class _YoutubeBarState extends State<YoutubeBar> {
                                                 TextButton(
                                                     onPressed: () {
                                                       // Remove the box
-                                                      downloadAndTranscribe(
-                                                          selectedVideo);
+                                                      processYoutubeContent(
+                                                          selectedVideo,
+                                                          context);
                                                       // Close the dialog
                                                       Navigator.of(context)
                                                           .pop();
@@ -269,61 +273,42 @@ class _YoutubeBarState extends State<YoutubeBar> {
       print("updateVids: ${videosList.toList()}");
     }
   }
+}
 
-  void downloadAndTranscribe(Video selectedVideo) async {
-    final YoutubeExplode yt = YoutubeExplode();
-    final StreamManifest manifest =
-        await yt.videos.streamsClient.getManifest(selectedVideo.id);
-    final StreamInfo audioStreamInfo = manifest.audioOnly.withHighestBitrate();
-    //
-//  audioStreamInfo.
-    // Open the file in writeAppend.
-    //final output = file.openWrite(mode: FileMode.writeOnlyAppend);
 
-// Track the file download status.
-//  final len = audioStreamInfo.size.totalBytes;
-//  var count = 0;
+Future<void> sendForRecognition(String storageUrl) async {
+  final serviceAccount = ServiceAccount.fromString(
+      (await rootBundle.loadString('assets/rdev_service_account.json')));
 
-    final audioStream = yt.videos.streamsClient.get(audioStreamInfo);
+  final speechToText = google.SpeechToText.viaServiceAccount(serviceAccount);
 
-    // Create the message and set the cursor position.
-    debugPrint(
-        'Downloading ${selectedVideo.title}.${audioStreamInfo.container.name}');
+  final recognitionConfig = google.RecognitionConfig(
+      audioChannelCount: 2,
+      encoding: google.AudioEncoding.OGG_OPUS,
+      model: google.RecognitionModel.basic,
+      enableAutomaticPunctuation: true,
+      sampleRateHertz: 48000,
+      languageCode: 'en-US');
 
-    final streamingConfig = google.StreamingRecognitionConfig(
-        config: google.RecognitionConfig(
-            encoding: audioStreamInfo.codec.parameters['codecs'] == 'opus'
-                ? google.AudioEncoding.ENCODING_UNSPECIFIED
-                : google.AudioEncoding.LINEAR16,
-            model: google.RecognitionModel.basic,
-            enableAutomaticPunctuation: true,
-            sampleRateHertz: 48000 ,
-            languageCode: 'en-US'),
-        interimResults: true);
+  /*  final streamingConfig = google.StreamingRecognitionConfig(
+        config: recognitionConfig,
+        interimResults: true); */
 
-    // Open the file to write.
-    //List<int> fileStream = [];
+  final response = speechToText
+      .longRunningRecognize(recognitionConfig, storageUrl)
+      .then((p0) => print("recognition finished!"));
+}
 
-//  var audio = yt.videos.streamsClient.get(audioStreamInfo);
-
-    final serviceAccount = ServiceAccount.fromString(
-        (await rootBundle.loadString('assets/test_service_account.json')));
-
-    final speechToText = google.SpeechToText.viaServiceAccount(serviceAccount);
-
-    final responseStream = speechToText.streamingRecognize(
-        streamingConfig, yt.videos.streamsClient.get(audioStreamInfo));
-
-    responseStream.listen((data) {
-      if (kDebugMode) {
-        print(data);
-      }
-      setState(() {
-        transcribedText = data.results
-            .map((e) => e.alternatives.first.transcript)
-            .toList()
-            .join('\n');
-      });
-    });
+void processYoutubeContent(Video selectedVideo, BuildContext context) async {
+  var saveFile = await downloadFromYoutube(selectedVideo);
+  if (kDebugMode) {
+    print("saveFile: $saveFile");
   }
+  var storageUrl = await uploadToCloud(selectedVideo, context);
+  if (kDebugMode) {
+    print("storageUrl: $storageUrl");
+  }
+  //
+  //
+  await sendForRecognition(storageUrl);
 }

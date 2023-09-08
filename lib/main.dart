@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:chat_gpt_sdk/chat_gpt_sdk.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
@@ -11,6 +12,7 @@ import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import 'firebase_options.dart';
 import 'widget/floating_action_buttons_bar.dart';
 import 'widget/language_bar.dart';
 
@@ -91,6 +93,9 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
     print('ready in 1...');
     await Future.delayed(const Duration(seconds: 1));
     print('go!');
+    WidgetsFlutterBinding.ensureInitialized();
+    await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform);
     FlutterNativeSplash.remove();
   }
 

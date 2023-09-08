@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1000085905599",
+    "project_id": "ytnobs-1d5e5",
+    "storage_bucket": "ytnobs-1d5e5.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1000085905599:android:3884033f34bedb7c0ca60a",
+        "android_client_info": {
+          "package_name": "com.example.speech_continuous_none"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAjfxTsf0cP2BN7f_8bWOq6ULKVEiI9loA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

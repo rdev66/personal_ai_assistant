@@ -1,18 +1,11 @@
-import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:google_speech/generated/google/cloud/speech/v1/cloud_speech.pb.dart';
-import 'package:googleapis/speech/v1.dart' as speech;
-import 'package:googleapis_auth/auth_io.dart';
+import 'package:provider/provider.dart';
+import 'package:speech_continuous_none/provider/google_speech_provider.dart';
 import 'package:speech_continuous_none/util/search_youtube.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import 'package:http/http.dart' as http;
+import '../provider/functions/google_provider_functions.dart';
 import '../util/debouncer.dart';
-import '../util/download_from_youtube.dart';
-import '../util/upload_to_cloud.dart';
 import 'toggle_bar.dart';
 
 class YoutubeBar extends StatefulWidget {
@@ -30,9 +23,6 @@ class _YoutubeBarState extends State<YoutubeBar> {
   List<Video> videosList = [];
   List<Video> vlist = [];
   late Video selectedVideo;
-  String transcribedText = '';
-  late final speech.SpeechApi speechApi;
-
   String query = '';
 
   //API call for All Subject List
@@ -55,13 +45,11 @@ class _YoutubeBarState extends State<YoutubeBar> {
   */
 
   @override
-  void initState() {
-    super.initState();
-    initSpeechApi();
-  }
-
-  @override
   Widget build(BuildContext context) {
+
+    final transcribedText =
+        Provider.of<GoogleSpeechProvider>(context, listen: true).googleSpeechTranscript;
+
     return Column(
       children: [
         Row(
@@ -103,17 +91,9 @@ class _YoutubeBarState extends State<YoutubeBar> {
                     ),
                     suffixIcon: InkWell(
                       onTap: () {
-                        if (kDebugMode) {
-                          print('search');
-                        }
+                        debugPrint('search');
                         searchYoutubeVideos(query).then((results) => setState(
-                              () {
-                                //TODO Sort results ??
-                                //results
-                                //  .sort((a,b) => a.uploadDate.difference(b.uploadDate!).inMilliseconds);
-
-                                videosList.addAll(results);
-                              },
+                              () => videosList.addAll(results),
                             ));
                       },
                       child: const Icon(Icons.search),
@@ -167,7 +147,6 @@ class _YoutubeBarState extends State<YoutubeBar> {
                                               'Youtube Video: ${videosList[index].title}');
                                         }
                                         selectedVideo = videosList[index];
-
                                         showDialog(
                                             context: context,
                                             builder: (ctx) => AlertDialog(
@@ -197,19 +176,19 @@ class _YoutubeBarState extends State<YoutubeBar> {
                                                     // The "Yes" button
                                                     TextButton(
                                                         onPressed: () {
+                                                          // Close the dialog
+                                                          Navigator.of(context)
+                                                              .pop();
+
                                                           // Remove the box
                                                           setState(() {
                                                             videosList.clear();
-                                                            transcribedText ='';
                                                           });
 
                                                           // Process the video
                                                           processYoutubeContent(
-                                                              selectedVideo,
-                                                              context);
-                                                          // Close the dialog
-                                                          Navigator.of(context)
-                                                              .pop();
+                                                              context,
+                                                              selectedVideo);
                                                         },
                                                         child: const Text(
                                                           'Yes',
@@ -252,7 +231,7 @@ class _YoutubeBarState extends State<YoutubeBar> {
                     ]),
                   ),
                   SizedBox(
-                    height: 200,
+                    height: 100,
                     child: ListView(children: <Widget>[
                       Container(
                         padding: const EdgeInsets.all(16),
@@ -279,86 +258,6 @@ class _YoutubeBarState extends State<YoutubeBar> {
     var newVids = await searchYoutubeVideos(query);
     videosList.clear();
     videosList.addAll(newVids);
-    if (kDebugMode) {
-      print("updateVids: ${videosList.toList()}");
-    }
-  }
-
-  Future<String?> sendForRecognition(String storageUrl, File file) async {
-    final longRunningRecognizeRequest = speech.LongRunningRecognizeRequest(
-        config: speech.RecognitionConfig(
-            audioChannelCount: 2,
-            enableAutomaticPunctuation: true,
-            encoding: "WEBM_OPUS",
-            sampleRateHertz: 48000,
-            languageCode: "en-US"),
-        audio: speech.RecognitionAudio(
-          // Can be content or gs uri
-          //  content:
-          uri: storageUrl,
-        ));
-
-    speech.Operation op = await speechApi.speech
-        .longrunningrecognize(longRunningRecognizeRequest);
-
-    return op.name;
-  }
-
-  Future<String> fetchTranscribeOperationResultsApi(
-      String operationName) async {
-    var conversation = "";
-
-    print("fetchTranscribeOperationResultsApi: $operationName");
-
-    var op = await speechApi.operations.get(operationName);
-
-    while (op.done != true) {
-      await Future.delayed(const Duration(seconds: 1));
-      debugPrint("Waiting for transcript operation to complete");
-      op = await speechApi.operations.get(operationName);
-    }
-    var results = (op.response as Map<String, dynamic>)['results'];
-
-    if (results.isNotEmpty) {
-      //First alternative higher confidence
-      for (var res in results) {
-        conversation += res['alternatives']
-            .map((alternative) => alternative['transcript'])
-            .join('');
-      }
-    } else {
-      return "Empty transcription result!";
-    }
-    return conversation;
-  }
-
-  void processYoutubeContent(Video selectedVideo, BuildContext context) async {
-    var saveFile = await downloadFromYoutube(selectedVideo);
-    debugPrint("saveFile: $saveFile");
-    var storageUrl = await uploadToCloud(selectedVideo, context);
-    debugPrint("storageUrl: $storageUrl");
-
-    final opName = await sendForRecognition(storageUrl, saveFile);
-
-    if (opName == null) {
-      debugPrint("No operation generated for transcript");
-      return;
-    }
-
-    final transcript = await fetchTranscribeOperationResultsApi(opName);
-
-    setState(() {
-      transcribedText = transcript;
-    });
-  }
-
-  Future<void> initSpeechApi() async {
-    final serviceAccountCredentials = ServiceAccountCredentials.fromJson(
-        await rootBundle.loadString('assets/rdev_service_account.json'));
-
-    final httpClient = await clientViaServiceAccount(
-        serviceAccountCredentials, [speech.SpeechApi.cloudPlatformScope]);
-
-    speechApi = speech.SpeechApi(httpClient);
+    debugPrint("updateVids: ${videosList.toList()}");
   }
 }

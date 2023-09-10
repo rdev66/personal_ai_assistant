@@ -2,11 +2,10 @@ import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
-Future<String> uploadToCloud(Video selectedVideo, BuildContext context) async {
+Future<String> uploadContentToGoogleCloud(Video selectedVideo) async {
   final YoutubeExplode yt = YoutubeExplode();
 
   // Create a storage reference from our app
@@ -40,8 +39,6 @@ Future<String> uploadToCloud(Video selectedVideo, BuildContext context) async {
           // ...
           break;
         case TaskState.success:
-          ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text("Upload Success!")));
           if (kDebugMode) {
             print("Success");
           }
@@ -56,14 +53,9 @@ Future<String> uploadToCloud(Video selectedVideo, BuildContext context) async {
           break;
       }
     });
-
     final taskSnapshot =
-        await uploadTask.whenComplete(() => print("Upload complete"));
-
-    ///String url = await taskSnapshot.ref.getDownloadURL();
+        await uploadTask.whenComplete(() => debugPrint("Upload complete"));
     return "gs://${storageRef.bucket}/${taskSnapshot.ref.fullPath}";
-
-
   } on FirebaseException catch (e) {
     if (kDebugMode) {
       print(e);

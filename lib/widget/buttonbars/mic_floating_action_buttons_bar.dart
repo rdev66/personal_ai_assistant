@@ -1,30 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import '../../provider/functions/gpt_provider_functions.dart';
+
 class MicFloatingActionButtonsBar extends StatelessWidget {
   final bool speechEnabled;
   final bool isSummarizing;
   final String totalWords;
-  final String gptResponse;
   final SpeechToText speechToText;
 
   final Function startListening;
   final Function stopListening;
-  final Function clearGPTResponse;
-  final Function chatComplete;
-  final Function speak;
 
   const MicFloatingActionButtonsBar(
-      this.speechEnabled,
       this.isSummarizing,
+      this.speechEnabled,
       this.totalWords,
-      this.gptResponse,
       this.speechToText,
       this.startListening,
       this.stopListening,
-      this.clearGPTResponse,
-      this.chatComplete,
-      this.speak,
       {super.key});
 
   @override
@@ -32,8 +26,10 @@ class MicFloatingActionButtonsBar extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        showSummarizeButton(),
-        showClearButton(),
+        showClearButton(context),
+        showSummarizeButton(context),
+        const Divider(),
+        //
         showStopRecordButton(),
         showStartRecordButton(),
       ],
@@ -58,9 +54,9 @@ class MicFloatingActionButtonsBar extends StatelessWidget {
     );
   }
 
-  FloatingActionButton showClearButton() {
+  FloatingActionButton showClearButton(context) {
     return FloatingActionButton(
-      onPressed: () => clearGPTResponse(),
+      onPressed: () => clearGPTResponse(context),
       backgroundColor:
           totalWords.isNotEmpty && !speechEnabled ? Colors.blue : Colors.grey,
       tooltip: 'Clear',
@@ -68,17 +64,11 @@ class MicFloatingActionButtonsBar extends StatelessWidget {
     );
   }
 
-  Widget showSummarizeButton() {
+  Widget showSummarizeButton(BuildContext context) {
     return isSummarizing
         ? const CircularProgressIndicator()
         : FloatingActionButton(
-            onPressed: () async {
-              chatComplete(totalWords);
-
-              if (speechEnabled) {
-                speak(gptResponse);
-              }
-            },
+            onPressed: () => generateTranscriptSummary(context, totalWords),
             backgroundColor:
                 (totalWords.isNotEmpty && speechToText.isNotListening)
                     ? Colors.blue

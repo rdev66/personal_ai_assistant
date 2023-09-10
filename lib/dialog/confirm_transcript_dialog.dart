@@ -1,5 +1,3 @@
-
-
 import 'package:flutter/material.dart';
 
 Widget showAlertDialog(BuildContext context, Function onPressed)
@@ -25,6 +23,4 @@ return AlertDialog(
                   child: const Text('No'))
             ],
           );
-
-
 }

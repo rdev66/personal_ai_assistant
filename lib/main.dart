@@ -1,12 +1,10 @@
-import 'dart:io';
-
-import 'package:chat_gpt_sdk/chat_gpt_sdk.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:speech_continuous_none/widget/gpt_bar.dart';
+import 'package:provider/provider.dart';
+import 'package:speech_continuous_none/provider/google_speech_provider.dart';
+import 'package:speech_continuous_none/provider/gpt_response_provider.dart';
+import 'package:speech_continuous_none/widget/gpt_summary_bar.dart';
 import 'package:speech_continuous_none/widget/toggle_source_bar.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
@@ -14,7 +12,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 
 import 'firebase_options.dart';
 import 'widget/buttonbars/mic_floating_action_buttons_bar.dart';
-import 'widget/buttonbars/youtube_floating_action_buttons_bar copy.dart';
+import 'widget/buttonbars/youtube_floating_action_buttons_bar.dart';
 import 'widget/language_bar.dart';
 
 void main() {
@@ -28,11 +26,20 @@ class SpeechToSummaryApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Personal AI asistant',
-      home: SpeechToSummary(),
-    );
+    return MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(
+            value: GptResponseProvider(),
+          ),
+          ChangeNotifierProvider.value(
+            value: GoogleSpeechProvider(),
+          ),
+        ],
+        child: const MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Personal AI asistant',
+          home: SpeechToSummary(),
+        ));
   }
 }
 
@@ -44,21 +51,6 @@ class SpeechToSummary extends StatefulWidget {
 }
 
 class SpeechToSummaryState extends State<SpeechToSummary> {
-  bool get isIOS => !kIsWeb && Platform.isIOS;
-  bool get isAndroid => !kIsWeb && Platform.isAndroid;
-
-  late FlutterTts _flutterTts;
-
-  final openAI = OpenAI.instance.build(
-      enableLog: true,
-      token: "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",
-//      token: "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",
-      baseOption: HttpSetup(
-        sendTimeout: const Duration(seconds: 50),
-        receiveTimeout: const Duration(seconds: 50),
-        connectTimeout: const Duration(seconds: 50),
-      ));
-
   final SpeechToText speechToText = SpeechToText();
 
   bool speechEnabled = false;
@@ -68,6 +60,8 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
   List<bool> selected = [true, false];
 
   String totalWords = '';
+  String transcribedText = '';
+  //
   String currentWords = '';
   String gptResponse = '';
 
@@ -79,7 +73,6 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
     super.initState();
     initialization();
     _initSpeech();
-    _initTTS();
   }
 
   void initialization() async {
@@ -87,10 +80,6 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
     // the splash screen is displayed.  Remove the following example because
     // delaying the user experience is a bad design practice!
     // ignore_for_file: avoid_print
-    print('ready in 3...');
-    await Future.delayed(const Duration(seconds: 1));
-    print('ready in 2...');
-    await Future.delayed(const Duration(seconds: 1));
     print('ready in 1...');
     await Future.delayed(const Duration(seconds: 1));
     print('go!');
@@ -102,9 +91,6 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
 
   /// This has to happen only once per app init.
   void _initSpeech() async {
-    //var p = await searchYoutubeVideos("query");
-    //print(p);
-
     speechAvailable = await speechToText.initialize(
         onError: errorListener, onStatus: statusListener);
 
@@ -113,16 +99,6 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
       availableLocales = locales;
       selectedLocaleId = locales.first.localeId;
     });
-  }
-
-  void _initTTS() {
-    _flutterTts = FlutterTts();
-    _setAwaitOptions();
-
-    if (isAndroid) {
-      _getDefaultEngine();
-      _getDefaultVoice();
-    }
   }
 
   /// Each time to start a speech recognition session
@@ -179,117 +155,29 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
     debugPrint(error.errorMsg.toString());
   }
 
-  void chatComplete(String textToSummarize) async {
-    if (gptResponse.isNotEmpty) {
-      debugPrint("Already summarized");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Already summarized'),
-        ),
-      );
-      return;
-    }
-    if (textToSummarize.isEmpty) {
-      debugPrint("No transcript to summarize");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No transcript to summarize'),
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      isSummarizing = true;
-    });
-
-    //const gptPrompt = 'TLDR: ';
-    const gptPromptBullet =
-        'Using extractive summarization, condense this business report into key bullet points: ';
-
-    final request = ChatCompleteText(messages: [
-      Messages(role: Role.user, content: '$gptPromptBullet $textToSummarize'),
-    ], maxToken: 200, model: Gpt4ChatModel());
-
-    final response =
-        await openAI.onChatCompletion(request: request).catchError((err) {
-      setState(() {
-        isSummarizing = false;
-      });
-
-      if (err is OpenAIAuthError) {
-        if (kDebugMode) {
-          print('OpenAIAuthError error ${err.data?.error.toMap()}');
-        }
-      }
-      if (err is OpenAIRateLimitError) {
-        if (kDebugMode) {
-          print('OpenAIRateLimitError error ${err.data?.error.toMap()}');
-        }
-      }
-      if (err is OpenAIServerError) {
-        if (kDebugMode) {
-          print('OpenAIServerError error $err');
-          print('OpenAIServerError error ${err.data?.error.toMap()}');
-        }
-      }
-      return null;
-    });
-
-    for (var element in response!.choices) {
-      debugPrint("data -> ${element.message?.content}");
-    }
-
-    setState(() {
-      gptResponse = response.choices.first.message!.content;
-      isSummarizing = false;
-    });
-
-    if (textToSpeechEnabled) {
-      speak(gptResponse);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        title: const Text('Personal AI meeting assistant'),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: <Widget>[
-            LanguageBar(selectedLocaleId, availableLocales),
-            ToggleSourceBar(
-                totalWords, speechAvailable, toggleSelected, selected),
-            GPTBar(gptResponse, textToSpeechEnabled, toggleTextToSpeech),
-          ],
+        appBar: AppBar(
+          centerTitle: true,
+          title: const Text('Personal AI meeting assistant'),
         ),
-      ),
-      floatingActionButton: selected[0]
-          ? MicFloatingActionButtonsBar(
-              speechEnabled,
-              isSummarizing,
-              totalWords,
-              gptResponse,
-              speechToText,
-              startListening,
-              stopListening,
-              clearGPTResponse,
-              chatComplete,
-              speak)
-          : YoutubeFloatingActionButtonsBar(
-              isSummarizing,
-              speechEnabled,
-              totalWords,
-              gptResponse,
-              speechToText,
-              clearGPTResponse,
-              chatComplete,
-              speak)
-          );
+        body: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: <Widget>[
+              LanguageBar(selectedLocaleId, availableLocales),
+              ToggleSourceBar(
+                  totalWords, speechAvailable, toggleSelected, selected),
+              GPTSummaryBar(textToSpeechEnabled, toggleTextToSpeech),
+            ],
+          ),
+        ),
+        floatingActionButton: selected[0]
+            ? MicFloatingActionButtonsBar(isSummarizing, speechEnabled,
+                totalWords, speechToText, startListening, stopListening)
+            : YoutubeFloatingActionButtonsBar(
+                isSummarizing, speechEnabled, speechToText.isListening));
   }
 
   void toggleSelected(int selectedIdx) {
@@ -321,37 +209,5 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
       totalWords = '';
       gptResponse = '';
     });
-  }
-
-  Future<void> _setAwaitOptions() async {
-    await _flutterTts.awaitSpeakCompletion(true);
-  }
-
-  Future<void> _getDefaultEngine() async {
-    var engine = await _flutterTts.getDefaultEngine;
-    if (engine != null) {
-      debugPrint(engine);
-    }
-  }
-
-  Future<void> _getDefaultVoice() async {
-    var voice = await _flutterTts.getDefaultVoice;
-    if (voice != null) {
-      debugPrint(voice.toString());
-    }
-  }
-
-  Future<void> speak(String newVoiceText) async {
-    double volume = 0.5;
-    double pitch = 1.0;
-    double rate = 0.4;
-
-    await _flutterTts.setVolume(volume);
-    await _flutterTts.setSpeechRate(rate);
-    await _flutterTts.setPitch(pitch);
-
-    if (newVoiceText.isNotEmpty) {
-      await _flutterTts.speak(newVoiceText);
-    }
   }
 }

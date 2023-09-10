@@ -38,6 +38,9 @@ dependencies:
   flutter_native_splash: ^2.3.2
   flutter_tts: ^3.8.1
   google_speech: ^2.2.0
+  googleapis: ^11.4.0
+  googleapis_auth: ^1.4.1
+  http: ^1.1.0
   path_provider: ^2.1.1
   permission_handler: ^10.4.5
   searchable_listview: ^2.6.1
@@ -59,7 +62,7 @@ flutter:
   uses-material-design: true
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/test_service_account.json
+    - assets/rdev_service_account.json
   #   - images/a_dot_ham.jpeg
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware

@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_speech/google_speech.dart' as google;
-import 'package:google_speech/speech_client_authenticator.dart';
+import 'package:google_speech/generated/google/cloud/speech/v1/cloud_speech.pb.dart';
+import 'package:googleapis/speech/v1.dart' as speech;
+import 'package:googleapis_auth/auth_io.dart';
 import 'package:speech_continuous_none/util/search_youtube.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:http/http.dart' as http;
 import '../util/debouncer.dart';
 import '../util/download_from_youtube.dart';
 import '../util/upload_to_cloud.dart';
@@ -28,6 +31,7 @@ class _YoutubeBarState extends State<YoutubeBar> {
   List<Video> vlist = [];
   late Video selectedVideo;
   String transcribedText = '';
+  late final speech.SpeechApi speechApi;
 
   String query = '';
 
@@ -53,12 +57,7 @@ class _YoutubeBarState extends State<YoutubeBar> {
   @override
   void initState() {
     super.initState();
-
-    /* searchYoutubeVideos("Taylor Swift").then((value) => setState(
-          () {
-            videosList.addAll(value);
-          },
-        )); */
+    initSpeechApi();
   }
 
   @override
@@ -109,6 +108,7 @@ class _YoutubeBarState extends State<YoutubeBar> {
                         }
                         searchYoutubeVideos(query).then((results) => setState(
                               () {
+                                //TODO Sort results ??
                                 //results
                                 //  .sort((a,b) => a.uploadDate.difference(b.uploadDate!).inMilliseconds);
 
@@ -137,95 +137,105 @@ class _YoutubeBarState extends State<YoutubeBar> {
                   },
                 ),
               ),
-              SizedBox(
-                  height: 275,
-                  child: (ListView.builder(
-                      shrinkWrap: true,
-                      physics: const ClampingScrollPhysics(),
-                      padding: const EdgeInsets.all(5),
-                      itemCount: videosList.length,
-                      itemBuilder: (BuildContext context, int index) {
-                        return Card(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            side: BorderSide(
-                              color: Colors.grey.shade300,
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(5.0),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                ListTile(
-                                  onTap: () {
-                                    if (kDebugMode) {
-                                      print(
-                                          'Youtube Video: ${videosList[index].title}');
-                                    }
-                                    selectedVideo = videosList[index];
+              videosList.isEmpty
+                  ? Container()
+                  : SizedBox(
+                      height: 275,
+                      child: (ListView.builder(
+                          shrinkWrap: true,
+                          physics: const ClampingScrollPhysics(),
+                          padding: const EdgeInsets.all(5),
+                          itemCount: videosList.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            return Card(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                side: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(5.0),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    ListTile(
+                                      onTap: () {
+                                        if (kDebugMode) {
+                                          print(
+                                              'Youtube Video: ${videosList[index].title}');
+                                        }
+                                        selectedVideo = videosList[index];
 
-                                    showDialog(
-                                        context: context,
-                                        builder: (ctx) => AlertDialog(
-                                              title: const Text(
-                                                'Please Confirm transcription',
-                                                style: TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.bold),
-                                              ),
-                                              content: Text(
-                                                  'Are you sure to transcribe: ${selectedVideo.title} ?'),
-                                              actions: [
-                                                TextButton(
-                                                    onPressed: () {
-                                                      // Close the dialog
-                                                      Navigator.of(context)
-                                                          .pop();
-                                                    },
-                                                    child: const Text(
-                                                      'No',
-                                                      style: TextStyle(
-                                                          fontSize: 18,
-                                                          fontWeight:
-                                                              FontWeight.bold),
-                                                    )),
-                                                // The "Yes" button
-                                                TextButton(
-                                                    onPressed: () {
-                                                      // Remove the box
-                                                      processYoutubeContent(
-                                                          selectedVideo,
-                                                          context);
-                                                      // Close the dialog
-                                                      Navigator.of(context)
-                                                          .pop();
-                                                    },
-                                                    child: const Text(
-                                                      'Yes',
-                                                      style: TextStyle(
-                                                          fontSize: 18,
-                                                          fontWeight:
-                                                              FontWeight.bold),
-                                                    )),
-                                              ],
-                                            ));
-                                  },
-                                  title: Text(
-                                    videosList[index].title,
-                                    style: const TextStyle(fontSize: 16),
-                                  ),
-                                  subtitle: Text(
-                                    '${videosList[index].duration?.inMinutes} minutes',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                )
-                              ],
-                            ),
-                          ),
-                        );
-                      }))),
+                                        showDialog(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                                  title: const Text(
+                                                    'Please Confirm transcription',
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold),
+                                                  ),
+                                                  content: Text(
+                                                      'Are you sure to transcribe: ${selectedVideo.title} ?'),
+                                                  actions: [
+                                                    TextButton(
+                                                        onPressed: () {
+                                                          // Close the dialog
+                                                          Navigator.of(context)
+                                                              .pop();
+                                                        },
+                                                        child: const Text(
+                                                          'No',
+                                                          style: TextStyle(
+                                                              fontSize: 18,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold),
+                                                        )),
+                                                    // The "Yes" button
+                                                    TextButton(
+                                                        onPressed: () {
+                                                          // Remove the box
+                                                          setState(() {
+                                                            videosList.clear();
+                                                            transcribedText ='';
+                                                          });
+
+                                                          // Process the video
+                                                          processYoutubeContent(
+                                                              selectedVideo,
+                                                              context);
+                                                          // Close the dialog
+                                                          Navigator.of(context)
+                                                              .pop();
+                                                        },
+                                                        child: const Text(
+                                                          'Yes',
+                                                          style: TextStyle(
+                                                              fontSize: 18,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold),
+                                                        )),
+                                                  ],
+                                                ));
+                                      },
+                                      title: Text(
+                                        videosList[index].title,
+                                        style: const TextStyle(fontSize: 16),
+                                      ),
+                                      subtitle: Text(
+                                        '${videosList[index].duration?.inMinutes} minutes',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    )
+                                  ],
+                                ),
+                              ),
+                            );
+                          }))),
               Column(
                 children: [
                   SizedBox(
@@ -273,42 +283,82 @@ class _YoutubeBarState extends State<YoutubeBar> {
       print("updateVids: ${videosList.toList()}");
     }
   }
-}
 
+  Future<String?> sendForRecognition(String storageUrl, File file) async {
+    final longRunningRecognizeRequest = speech.LongRunningRecognizeRequest(
+        config: speech.RecognitionConfig(
+            audioChannelCount: 2,
+            enableAutomaticPunctuation: true,
+            encoding: "WEBM_OPUS",
+            sampleRateHertz: 48000,
+            languageCode: "en-US"),
+        audio: speech.RecognitionAudio(
+          // Can be content or gs uri
+          //  content:
+          uri: storageUrl,
+        ));
 
-Future<void> sendForRecognition(String storageUrl) async {
-  final serviceAccount = ServiceAccount.fromString(
-      (await rootBundle.loadString('assets/rdev_service_account.json')));
+    speech.Operation op = await speechApi.speech
+        .longrunningrecognize(longRunningRecognizeRequest);
 
-  final speechToText = google.SpeechToText.viaServiceAccount(serviceAccount);
-
-  final recognitionConfig = google.RecognitionConfig(
-      audioChannelCount: 2,
-      encoding: google.AudioEncoding.OGG_OPUS,
-      model: google.RecognitionModel.basic,
-      enableAutomaticPunctuation: true,
-      sampleRateHertz: 48000,
-      languageCode: 'en-US');
-
-  /*  final streamingConfig = google.StreamingRecognitionConfig(
-        config: recognitionConfig,
-        interimResults: true); */
-
-  final response = speechToText
-      .longRunningRecognize(recognitionConfig, storageUrl)
-      .then((p0) => print("recognition finished!"));
-}
-
-void processYoutubeContent(Video selectedVideo, BuildContext context) async {
-  var saveFile = await downloadFromYoutube(selectedVideo);
-  if (kDebugMode) {
-    print("saveFile: $saveFile");
+    return op.name;
   }
-  var storageUrl = await uploadToCloud(selectedVideo, context);
-  if (kDebugMode) {
-    print("storageUrl: $storageUrl");
+
+  Future<String> fetchTranscribeOperationResultsApi(
+      String operationName) async {
+    var conversation = "";
+
+    print("fetchTranscribeOperationResultsApi: $operationName");
+
+    var op = await speechApi.operations.get(operationName);
+
+    while (op.done != true) {
+      await Future.delayed(const Duration(seconds: 1));
+      debugPrint("Waiting for transcript operation to complete");
+      op = await speechApi.operations.get(operationName);
+    }
+    var results = (op.response as Map<String, dynamic>)['results'];
+
+    if (results.isNotEmpty) {
+      //First alternative higher confidence
+      for (var res in results) {
+        conversation += res['alternatives']
+            .map((alternative) => alternative['transcript'])
+            .join('');
+      }
+    } else {
+      return "Empty transcription result!";
+    }
+    return conversation;
   }
-  //
-  //
-  await sendForRecognition(storageUrl);
+
+  void processYoutubeContent(Video selectedVideo, BuildContext context) async {
+    var saveFile = await downloadFromYoutube(selectedVideo);
+    debugPrint("saveFile: $saveFile");
+    var storageUrl = await uploadToCloud(selectedVideo, context);
+    debugPrint("storageUrl: $storageUrl");
+
+    final opName = await sendForRecognition(storageUrl, saveFile);
+
+    if (opName == null) {
+      debugPrint("No operation generated for transcript");
+      return;
+    }
+
+    final transcript = await fetchTranscribeOperationResultsApi(opName);
+
+    setState(() {
+      transcribedText = transcript;
+    });
+  }
+
+  Future<void> initSpeechApi() async {
+    final serviceAccountCredentials = ServiceAccountCredentials.fromJson(
+        await rootBundle.loadString('assets/rdev_service_account.json'));
+
+    final httpClient = await clientViaServiceAccount(
+        serviceAccountCredentials, [speech.SpeechApi.cloudPlatformScope]);
+
+    speechApi = speech.SpeechApi(httpClient);
+  }
 }

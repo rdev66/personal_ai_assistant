@@ -1,0 +1,71 @@
+{
+  "done": true,
+  "metadata": {
+    "@type": "type.googleapis.com/google.cloud.speech.v1.LongRunningRecognizeMetadata",
+    "lastUpdateTime": "2023-09-10T11:04:24.694683Z",
+    "progressPercent": 100,
+    "startTime": "2023-09-10T11:04:05.963931Z",
+    "uri": "gs://ytnobs-1d5e5.appspot.com/audios/Job Interview： I Want to Learn (ESL) [naIkpQ_cIt0].m4a"
+  },
+  "name": "7646694847631333241",
+  "response": {
+    "@type": "type.googleapis.com/google.cloud.speech.v1.LongRunningRecognizeResponse",
+    "requestId": "7646694847631333241",
+   
+   
+   
+    "results": [
+      {
+        "alternatives": [
+          {
+            "confidence": 0.80184424,
+            "transcript": "Mary"
+          }
+        ],
+        "languageCode": "en-us",
+        "resultEndTime": "4.320s"
+      },
+      {
+        "alternatives": [
+          {
+            "confidence": 0.937277,
+            "transcript": " hello I'm Susan Thompson resource manager"
+          }
+        ],
+        "languageCode": "en-us",
+        "resultEndTime": "18.250s"
+      },
+      {
+        "alternatives": [
+          {
+            "confidence": 0.88402617,
+            "transcript": " Siri do you have any experience working in the kitchen I work hard and I cook a lot at home"
+          }
+        ],
+        "languageCode": "en-us",
+        "resultEndTime": "30.820s"
+      },
+      {
+        "alternatives": [
+          {
+            "confidence": 0.9611099,
+            "transcript": " okay well tell me about yourself I love to learn new things very organized and I follow directions exactly and that's why my boss at my last job made me a trainer and the company actually gave me a special certificate for coming to work on time every day for a year and I'm taking it looks class to improve my writing skills that's great why did you leave your last job and I need to work days now I see what hours can you work"
+          }
+        ],
+        "languageCode": "en-us",
+        "resultEndTime": "74.210s"
+      },
+      {
+        "alternatives": [
+          {
+            "confidence": 0.9564796,
+            "transcript": " okay will do you have any questions for me Mary yes what kind of training is needed not a lot most new workers can learn everything the first day you have any other questions no I don't think so but I put a lot of good things about your company and I would really like to work here I have a few more interviews to do today but I will call you tomorrow if you get the job it was sure nice to meet you and you too thank you so much for your time he has good luck thank you"
+          }
+        ],
+        "languageCode": "en-us",
+        "resultEndTime": "104.010s"
+      }
+    ],
+    "totalBilledTime": "105s"
+  }
+}

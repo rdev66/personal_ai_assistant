@@ -1,27 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
-class FloatingActionButtonsBar extends StatelessWidget {
-  final bool speechEnabled;
+class YoutubeFloatingActionButtonsBar extends StatelessWidget {
+
   final bool isSummarizing;
-  final String totalWords;
+  final bool speechEnabled;
+  final String transcribedText;
   final String gptResponse;
   final SpeechToText speechToText;
 
-  final Function startListening;
-  final Function stopListening;
   final Function clearGPTResponse;
-  final Function chatComplete;
+  final Function(String) chatComplete;
   final Function speak;
 
-  const FloatingActionButtonsBar(
-      this.speechEnabled,
+  const YoutubeFloatingActionButtonsBar(
       this.isSummarizing,
-      this.totalWords,
+      this.speechEnabled,
+      this.transcribedText,
       this.gptResponse,
       this.speechToText,
-      this.startListening,
-      this.stopListening,
       this.clearGPTResponse,
       this.chatComplete,
       this.speak,
@@ -34,27 +31,7 @@ class FloatingActionButtonsBar extends StatelessWidget {
       children: [
         showSummarizeButton(),
         showClearButton(),
-        showStopRecordButton(),
-        showStartRecordButton(),
       ],
-    );
-  }
-
-  FloatingActionButton showStartRecordButton() {
-    return FloatingActionButton(
-      backgroundColor: !speechEnabled ? Colors.green : Colors.grey,
-      onPressed: () => startListening(),
-      tooltip: 'Start',
-      child: const Icon(Icons.mic),
-    );
-  }
-
-  FloatingActionButton showStopRecordButton() {
-    return FloatingActionButton(
-      backgroundColor: speechEnabled ? Colors.red : Colors.grey,
-      onPressed: () => stopListening(),
-      tooltip: 'Stop',
-      child: const Icon(Icons.mic_off),
     );
   }
 
@@ -62,7 +39,7 @@ class FloatingActionButtonsBar extends StatelessWidget {
     return FloatingActionButton(
       onPressed: () => clearGPTResponse(),
       backgroundColor:
-          totalWords.isNotEmpty && !speechEnabled ? Colors.blue : Colors.grey,
+          transcribedText.isNotEmpty ? Colors.blue : Colors.grey,
       tooltip: 'Clear',
       child: const Icon(Icons.clear),
     );
@@ -73,18 +50,18 @@ class FloatingActionButtonsBar extends StatelessWidget {
         ? const CircularProgressIndicator()
         : FloatingActionButton(
             onPressed: () async {
-              chatComplete();
+              chatComplete(transcribedText);
 
               if (speechEnabled) {
                 speak(gptResponse);
               }
             },
             backgroundColor:
-                (totalWords.isNotEmpty && speechToText.isNotListening)
+                (transcribedText.isNotEmpty && speechToText.isNotListening)
                     ? Colors.blue
                     : Colors.grey,
             tooltip: "Summarize",
-            child: Icon(totalWords.isNotEmpty
+            child: Icon(transcribedText.isNotEmpty
                 ? Icons.summarize
                 : Icons.comments_disabled),
           );

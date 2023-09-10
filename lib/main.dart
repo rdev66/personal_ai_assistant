@@ -13,7 +13,8 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import 'firebase_options.dart';
-import 'widget/floating_action_buttons_bar.dart';
+import 'widget/buttonbars/mic_floating_action_buttons_bar.dart';
+import 'widget/buttonbars/youtube_floating_action_buttons_bar copy.dart';
 import 'widget/language_bar.dart';
 
 void main() {
@@ -178,7 +179,7 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
     debugPrint(error.errorMsg.toString());
   }
 
-  void chatComplete() async {
+  void chatComplete(String textToSummarize) async {
     if (gptResponse.isNotEmpty) {
       debugPrint("Already summarized");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -188,7 +189,7 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
       );
       return;
     }
-    if (totalWords.isEmpty) {
+    if (textToSummarize.isEmpty) {
       debugPrint("No transcript to summarize");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -207,7 +208,7 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
         'Using extractive summarization, condense this business report into key bullet points: ';
 
     final request = ChatCompleteText(messages: [
-      Messages(role: Role.user, content: '$gptPromptBullet $totalWords'),
+      Messages(role: Role.user, content: '$gptPromptBullet $textToSummarize'),
     ], maxToken: 200, model: Gpt4ChatModel());
 
     final response =
@@ -267,18 +268,28 @@ class SpeechToSummaryState extends State<SpeechToSummary> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButtonsBar(
-          speechEnabled,
-          isSummarizing,
-          totalWords,
-          gptResponse,
-          speechToText,
-          startListening,
-          stopListening,
-          clearGPTResponse,
-          chatComplete,
-          speak),
-    );
+      floatingActionButton: selected[0]
+          ? MicFloatingActionButtonsBar(
+              speechEnabled,
+              isSummarizing,
+              totalWords,
+              gptResponse,
+              speechToText,
+              startListening,
+              stopListening,
+              clearGPTResponse,
+              chatComplete,
+              speak)
+          : YoutubeFloatingActionButtonsBar(
+              isSummarizing,
+              speechEnabled,
+              totalWords,
+              gptResponse,
+              speechToText,
+              clearGPTResponse,
+              chatComplete,
+              speak)
+          );
   }
 
   void toggleSelected(int selectedIdx) {

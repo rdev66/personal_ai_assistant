@@ -18,9 +18,11 @@ class GptResponseProvider extends ChangeNotifier {
         connectTimeout: const Duration(seconds: 50),
       ));
 
-  void chatComplete(String textToSummarize) async {
+  void chatComplete(BuildContext context, String textToSummarize) async {
     if (gptSummary.isNotEmpty) {
       debugPrint("Already summarized");
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Already summarized'), duration: Duration(seconds: 2)));
       return;
     }
 
